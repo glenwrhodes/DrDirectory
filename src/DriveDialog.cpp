@@ -2,6 +2,7 @@
 #include "Format.h"
 #include "Icons.h"
 #include "PercentBarDelegate.h"
+#include "Platform.h"
 #include "Roles.h"
 #include <QDialogButtonBox>
 #include <QDir>
@@ -18,7 +19,6 @@
 #include <QStorageInfo>
 #include <QTreeWidget>
 #include <QVBoxLayout>
-#include <windows.h>
 
 namespace {
 enum { LocalRole = Qt::UserRole + 50, PathRole };
@@ -38,18 +38,18 @@ DriveDialog::DriveDialog(const QString& lastFolder, QWidget* parent)
     m_drives = new QTreeWidget(this);
     m_drives->setRootIsDecorated(false);
     m_drives->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    m_drives->setHeaderLabels({tr("Drive"), tr("Label"), tr("Total"), tr("Free"), tr("Used"), tr("File System")});
+    m_drives->setHeaderLabels({tr("Volume"), tr("Label"), tr("Total"), tr("Free"), tr("Used"), tr("File System")});
     m_drives->setItemDelegateForColumn(4, new PercentBarDelegate(m_drives));
     m_drives->header()->setStretchLastSection(false);
     m_drives->header()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_drives->setColumnWidth(0, 90);
+    m_drives->setColumnWidth(0, 140);
     m_drives->setColumnWidth(2, 90);
     m_drives->setColumnWidth(3, 90);
     m_drives->setColumnWidth(4, 130);
     m_drives->setColumnWidth(5, 90);
 
     m_folderEdit = new QLineEdit(lastFolder, this);
-    m_folderEdit->setPlaceholderText(tr("C:\\Users\\..."));
+    m_folderEdit->setPlaceholderText(QDir::toNativeSeparators(QDir::homePath()));
     auto browse = new QPushButton(tr("&Browse\u2026"), this);
     auto folderRow = new QHBoxLayout;
     folderRow->addWidget(m_folder);
@@ -90,14 +90,9 @@ DriveDialog::DriveDialog(const QString& lastFolder, QWidget* parent)
 void DriveDialog::populate()
 {
     const QIcon driveIcon = Icons::tinted(Icons::Drive, QColor(94, 234, 212));
-    const auto volumes = QStorageInfo::mountedVolumes();
+    const auto volumes = Platform::scannableVolumes();
     for (const QStorageInfo& s : volumes) {
-        if (!s.isValid() || !s.isReady())
-            continue;
         const QString root = QDir::toNativeSeparators(s.rootPath());
-        if (root.size() != 3 || root[1] != QLatin1Char(':'))
-            continue; // only lettered drives
-        const UINT type = GetDriveTypeW(reinterpret_cast<const wchar_t*>(root.utf16()));
         auto it = new QTreeWidgetItem(m_drives);
         it->setText(0, root);
         it->setIcon(0, driveIcon);
@@ -111,7 +106,7 @@ void DriveDialog::populate()
         it->setText(5, QString::fromLatin1(s.fileSystemType()));
         it->setTextAlignment(2, Qt::AlignRight | Qt::AlignVCenter);
         it->setTextAlignment(3, Qt::AlignRight | Qt::AlignVCenter);
-        it->setData(0, LocalRole, type == DRIVE_FIXED);
+        it->setData(0, LocalRole, Platform::isLocalVolume(s));
         it->setData(0, PathRole, root);
     }
 }

@@ -1,7 +1,7 @@
 #include "ExtensionModel.h"
 #include "Format.h"
 #include "Roles.h"
-#include "WinShell.h"
+#include "Platform.h"
 #include <QPainter>
 
 ExtensionModel::ExtensionModel(ExtensionTable* table, QObject* parent)
@@ -66,7 +66,7 @@ QVariant ExtensionModel::data(const QModelIndex& index, int role) const
     case Qt::DisplayRole:
         switch (index.column()) {
         case ColExt: return e.ext.isEmpty() ? tr("(no extension)") : QStringLiteral(".") + e.ext;
-        case ColDesc: return WinShell::typeNameForExtension(e.ext);
+        case ColDesc: return Platform::typeNameForExtension(e.ext);
         case ColBytes: return Fmt::size(e.bytes);
         case ColPercent: return Fmt::percent(frac);
         case ColFiles: return Fmt::count(e.files);
@@ -76,7 +76,7 @@ QVariant ExtensionModel::data(const QModelIndex& index, int role) const
         if (index.column() == ColExt)
             return swatch(e.color);
         if (index.column() == ColDesc)
-            return WinShell::iconForExtension(e.ext);
+            return Platform::iconForExtension(e.ext);
         break;
     case Qt::TextAlignmentRole:
         if (index.column() == ColBytes || index.column() == ColFiles)
@@ -85,7 +85,7 @@ QVariant ExtensionModel::data(const QModelIndex& index, int role) const
     case Roles::Sort:
         switch (index.column()) {
         case ColExt: return e.ext;
-        case ColDesc: return WinShell::typeNameForExtension(e.ext);
+        case ColDesc: return Platform::typeNameForExtension(e.ext);
         case ColBytes:
         case ColPercent: return e.bytes;
         case ColFiles: return e.files;

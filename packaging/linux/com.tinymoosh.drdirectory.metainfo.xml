@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.tinymoosh.drdirectory</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>DrDirectory</name>
+  <summary>Fast disk usage analyzer with a cushion treemap</summary>
+  <description>
+    <p>DrDirectory scans drives and folders with a multithreaded scanner and shows where the space went:
+    a sortable folder tree, a cushion-shaded treemap you can drill into, per-file-type statistics and a
+    largest-files list. Delete or trash items in place without rescanning.</p>
+  </description>
+  <launchable type="desktop-id">drdirectory.desktop</launchable>
+  <url type="homepage">https://github.com/glenwrhodes/DrDirectory</url>
+  <developer id="com.tinymoosh"><name>Tiny Moosh Games Inc.</name></developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.0" date="2026-10-28"/>
+  </releases>
+</component>

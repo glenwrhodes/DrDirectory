@@ -1,0 +1,220 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: '6.8.3'
+
+jobs:
+  windows:
+    name: Windows (x64 installer + portable zip)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV; else echo "VERSION=1.0.0" >> $GITHUB_ENV; fi
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+
+      - name: Install Ninja and Inno Setup
+        run: choco install ninja innosetup -y --no-progress
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Deploy Qt runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force deploy | Out-Null
+          Copy-Item build\DrDirectory.exe deploy\
+          windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime deploy\DrDirectory.exe
+          # Ship the MSVC runtime app-locally so no separate redistributable install is needed.
+          Remove-Item deploy\vc_redist*.exe -ErrorAction SilentlyContinue
+          Copy-Item "$env:VCToolsRedistDir\x64\Microsoft.VC*.CRT\*.dll" deploy\
+          Copy-Item LICENSE, README.md deploy\
+
+      - name: Self-test (headless scan of src/)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath deploy\DrDirectory.exe -ArgumentList '--selftest', "$pwd\src", "$pwd\selftest.txt" -Wait -PassThru
+          Get-Content selftest.txt
+          $expected = (Get-ChildItem src -File -Recurse -Force).Count
+          if ($p.ExitCode -ne 0 -or -not (Select-String -Path selftest.txt -Pattern "^files=$expected$" -Quiet)) { throw "self-test failed (expected files=$expected)" }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = Get-ChildItem "C:\Program Files (x86)\Inno Setup *\ISCC.exe" | Select-Object -First 1
+          & $iscc.FullName "/DAppVersion=$env:VERSION" "/DSourceDir=$pwd\deploy" packaging\windows\DrDirectory.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+
+      - name: Verify installer (silent install + self-test + uninstall)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
+          $dir = "$env:RUNNER_TEMP\DrDirectoryInstall"
+          Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$dir" -Wait
+          if (-not (Test-Path "$dir\DrDirectory.exe") -or -not (Test-Path "$dir\platforms\qwindows.dll")) { throw "installer did not lay down the app" }
+          $p = Start-Process -FilePath "$dir\DrDirectory.exe" -ArgumentList '--selftest', "$pwd\src", "$pwd\installed.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installed app failed its self-test" }
+          Get-Content installed.txt
+          Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait
+
+      - name: Portable zip
+        shell: pwsh
+        run: Compress-Archive -Path deploy\* -DestinationPath "dist\DrDirectory-$env:VERSION-windows-x64-portable.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrDirectory-windows
+          path: dist/*
+
+  macos:
+    name: macOS (universal .dmg)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV; else echo "VERSION=1.0.0" >> $GITHUB_ENV; fi
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Bundle Qt
+        run: |
+          macdeployqt build/DrDirectory.app
+          codesign --force --deep --sign - build/DrDirectory.app
+          lipo -info build/DrDirectory.app/Contents/MacOS/DrDirectory
+
+      - name: Self-test (headless scan of src/)
+        run: |
+          QT_QPA_PLATFORM=offscreen build/DrDirectory.app/Contents/MacOS/DrDirectory --selftest "$PWD/src" "$PWD/selftest.txt"
+          cat selftest.txt
+          expected=$(find src -type f | wc -l | tr -d ' ')
+          grep -qx "files=$expected" selftest.txt
+
+      - name: Create DMG
+        run: |
+          mkdir -p dist dmg
+          cp -R build/DrDirectory.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "DrDirectory" -srcfolder dmg -ov -format UDZO "dist/DrDirectory-$VERSION-macos-universal.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrDirectory-macos
+          path: dist/*
+
+  linux:
+    name: Linux (x86_64 AppImage)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV; else echo "VERSION=1.0.0" >> $GITHUB_ENV; fi
+
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl1-mesa-dev libegl1 libxkbcommon-dev libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xfixes0 libfontconfig1 libfuse2 file
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Self-test (headless scan of src/)
+        run: |
+          QT_QPA_PLATFORM=offscreen build/DrDirectory --selftest "$PWD/src" "$PWD/selftest.txt"
+          cat selftest.txt
+          expected=$(find src -type f | wc -l)
+          grep -qx "files=$expected" selftest.txt
+
+      - name: AppImage
+        run: |
+          DESTDIR=AppDir cmake --install build
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy*.AppImage
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib:$LD_LIBRARY_PATH"
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export LINUXDEPLOY_OUTPUT_VERSION="$VERSION"
+          export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir \
+            -e AppDir/usr/bin/DrDirectory \
+            -d AppDir/usr/share/applications/drdirectory.desktop \
+            -i AppDir/usr/share/icons/hicolor/256x256/apps/drdirectory.png \
+            --plugin qt --output appimage
+          mkdir -p dist
+          mv DrDirectory-*.AppImage "dist/DrDirectory-$VERSION-linux-x86_64.AppImage"
+
+      - name: Self-test the AppImage
+        run: |
+          chmod +x dist/*.AppImage
+          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 dist/DrDirectory-$VERSION-linux-x86_64.AppImage --selftest "$PWD/src" "$PWD/appimage.txt"
+          cat appimage.txt
+
+      - name: Tarball
+        run: tar -C AppDir -czf "dist/DrDirectory-$VERSION-linux-x86_64.tar.gz" usr
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrDirectory-linux
+          path: dist/*
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

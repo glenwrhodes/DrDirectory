@@ -11,7 +11,7 @@
 #include "Roles.h"
 #include "Scanner.h"
 #include "TreemapWidget.h"
-#include "WinShell.h"
+#include "Platform.h"
 
 #include <QActionGroup>
 #include <QApplication>
@@ -94,16 +94,18 @@ MainWindow::~MainWindow()
     m_model->setRoot(nullptr);
 }
 
-void MainWindow::startup(const QStringList& args)
+void MainWindow::startup(const QStringList& args, int dialogDelayMs)
 {
     QStringList paths;
     for (const QString& a : args)
         if (QFileInfo(a).isDir())
             paths << a;
+    if (!m_capture.file.isEmpty() && m_capture.duringScan)
+        QTimer::singleShot(1500, this, &MainWindow::doCapture);
     if (!paths.isEmpty())
         startScan(paths);
     else
-        QTimer::singleShot(0, this, &MainWindow::openScanDialog);
+        QTimer::singleShot(dialogDelayMs, this, &MainWindow::openScanDialog);
 }
 
 // ------------------------------------------------------------------------------------------------ setup
@@ -143,7 +145,7 @@ void MainWindow::createActions()
     m_actOpen->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return));
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openItem);
 
-    m_actExplorer = new QAction(Icons::make(Icons::Folder), tr("Show in &Explorer"), this);
+    m_actExplorer = new QAction(Icons::make(Icons::Folder), tr("Show in %1").arg(Platform::fileManagerName()), this);
     m_actExplorer->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
     connect(m_actExplorer, &QAction::triggered, this, &MainWindow::showInExplorer);
 
@@ -159,7 +161,7 @@ void MainWindow::createActions()
     m_actProperties->setShortcut(QKeySequence(Qt::ALT | Qt::Key_Return));
     connect(m_actProperties, &QAction::triggered, this, &MainWindow::showProperties);
 
-    m_actRecycle = new QAction(Icons::make(Icons::Recycle), tr("&Delete (to Recycle Bin)\u2026"), this);
+    m_actRecycle = new QAction(Icons::make(Icons::Recycle), tr("&Delete (to %1)\u2026").arg(Platform::trashName()), this);
     m_actRecycle->setShortcut(QKeySequence::Delete);
     connect(m_actRecycle, &QAction::triggered, this, [this] { deleteSelection(true); });
 
@@ -211,6 +213,9 @@ void MainWindow::createActions()
     m_actShowTreemap->setCheckable(true);
     m_actShowTreemap->setChecked(true);
     m_actShowTreemap->setShortcut(QKeySequence(Qt::Key_F9));
+
+    m_actSaveImage = new QAction(Icons::make(Icons::Export), tr("Save Treemap as &Image\u2026"), this);
+    connect(m_actSaveImage, &QAction::triggered, this, &MainWindow::saveTreemapImage);
 
     m_actAbout = new QAction(Icons::make(Icons::Info), tr("&About DrDirectory"), this);
     connect(m_actAbout, &QAction::triggered, this, &MainWindow::about);
@@ -399,7 +404,7 @@ void MainWindow::createWidgets()
             });
     connect(m_largestView, &QTableView::doubleClicked, this, [this](const QModelIndex& idx) {
         if (FileNode* n = nodeOf(idx))
-            WinShell::showInExplorer(n->fullPath());
+            Platform::showInFileManager(n->fullPath());
     });
     connect(m_largestView, &QTableView::customContextMenuRequested, this, [this](const QPoint& pos) {
         const QModelIndex idx = m_largestView->indexAt(pos);
@@ -426,8 +431,10 @@ void MainWindow::createMenus()
     file->addSeparator();
     file->addAction(m_actExport);
     file->addSeparator();
-    file->addAction(m_actAdmin);
-    file->addSeparator();
+    if (Platform::supportsElevation()) {
+        file->addAction(m_actAdmin);
+        file->addSeparator();
+    }
     file->addAction(m_actExit);
 
     QMenu* edit = menuBar()->addMenu(tr("&Edit"));
@@ -446,6 +453,8 @@ void MainWindow::createMenus()
     tm->addAction(m_actZoomOut);
     tm->addAction(m_actZoomReset);
     tm->addAction(m_actZoomHere);
+    tm->addSeparator();
+    tm->addAction(m_actSaveImage);
     tm->addSeparator();
     tm->addAction(m_actCushion);
     tm->addAction(m_actGrid);
@@ -487,9 +496,9 @@ void MainWindow::createToolBar()
     m_actScan->setIconText(tr("Scan"));
     m_actRescan->setIconText(tr("Rescan"));
     m_actStop->setIconText(tr("Stop"));
-    m_actRecycle->setIconText(tr("Recycle"));
+    m_actRecycle->setIconText(tr("Trash"));
     m_actDelete->setIconText(tr("Delete"));
-    m_actExplorer->setIconText(tr("Explorer"));
+    m_actExplorer->setIconText(Platform::fileManagerName());
     tb->addAction(m_actScan);
     tb->addAction(m_actRescan);
     tb->addAction(m_actStop);
@@ -501,11 +510,6 @@ void MainWindow::createToolBar()
     tb->addAction(m_actExplorer);
     tb->addAction(m_actRecycle);
     tb->addAction(m_actDelete);
-    if (!WinShell::isElevated()) {
-        tb->addSeparator();
-        m_actAdmin->setIconText(tr("Run as Admin"));
-        tb->addAction(m_actAdmin);
-    }
 }
 
 void MainWindow::createStatusBar()
@@ -518,17 +522,9 @@ void MainWindow::createStatusBar()
     m_progress->setMaximumWidth(220);
     m_progress->setTextVisible(true);
     m_progress->hide();
-    m_adminLabel = new QLabel(this);
-    m_adminLabel->setText(WinShell::isElevated() ? tr("ADMIN") : tr("STANDARD USER"));
-    m_adminLabel->setObjectName(WinShell::isElevated() ? QStringLiteral("AdminPillOn") : QStringLiteral("AdminPill"));
-    m_adminLabel->setFont(Theme::displayFont(8.5));
-    m_adminLabel->setToolTip(WinShell::isElevated()
-                                 ? tr("Running elevated: protected folders are included in the scan.")
-                                 : tr("Some system folders can't be read without elevation; they show up as <Unknown>."));
     statusBar()->addWidget(m_statusLabel, 1);
     statusBar()->addWidget(m_hoverLabel, 2);
     statusBar()->addPermanentWidget(m_progress);
-    statusBar()->addPermanentWidget(m_adminLabel);
 }
 
 void MainWindow::loadSettings()
@@ -588,7 +584,8 @@ void MainWindow::saveSettings()
 void MainWindow::closeEvent(QCloseEvent* e)
 {
     m_scanner->cancel();
-    saveSettings();
+    if (m_capture.file.isEmpty()) // screenshot runs must not overwrite the user's layout
+        saveSettings();
     e->accept();
 }
 
@@ -644,7 +641,7 @@ void MainWindow::startScan(const QStringList& pathsIn)
     m_scanPaths = paths;
     m_scanMode = ScanMode::Full;
     m_refreshTarget = nullptr;
-    if (paths.size() == 1 && !Scanner::isDriveRoot(paths.first()))
+    if (paths.size() == 1 && !Scanner::isVolumeRoot(paths.first()))
         m_lastFolder = paths.first();
 
     // Detach every view from the old tree before destroying it.
@@ -657,7 +654,7 @@ void MainWindow::startScan(const QStringList& pathsIn)
 
     m_expectedBytes = 0;
     for (const QString& p : paths) {
-        if (!Scanner::isDriveRoot(p)) {
+        if (!Scanner::isVolumeRoot(p)) {
             m_expectedBytes = 0;
             break;
         }
@@ -755,6 +752,8 @@ void MainWindow::onScanFinished(bool cancelled)
             const QModelIndex rootIdx = m_model->index(0, 0);
             m_treeView->expand(rootIdx);
             m_treeView->selectionModel()->setCurrentIndex(rootIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            if (!m_capture.file.isEmpty() && !m_capture.duringScan)
+                QTimer::singleShot(300, this, &MainWindow::prepareAndCapture);
             m_summary = tr("Scanned %1 files in %2 folders (%3) in %4 s")
                             .arg(Fmt::count(m_tree->fileCount), Fmt::count(m_tree->dirCount),
                                  Fmt::size(m_tree->size), QString::number(secs, 'f', 1));
@@ -904,6 +903,7 @@ void MainWindow::updateActions()
     m_actRefreshSel->setEnabled(idle && hasTree && n && !n->isSpecial());
     m_actStop->setEnabled(!idle);
     m_actExport->setEnabled(idle && hasTree);
+    m_actSaveImage->setEnabled(m_treemap->zoomRoot() != nullptr);
     m_threadGroup->setEnabled(idle);
     m_actOpen->setEnabled(real);
     m_actExplorer->setEnabled(real);
@@ -944,8 +944,6 @@ void MainWindow::updateTitle()
     QString t = QStringLiteral("DrDirectory");
     if (!m_scanPaths.isEmpty())
         t += QStringLiteral(" \u2014 ") + m_scanPaths.join(QStringLiteral(", "));
-    if (WinShell::isElevated())
-        t += tr(" (Administrator)");
     setWindowTitle(t);
 }
 
@@ -964,13 +962,13 @@ void MainWindow::copyPath()
 void MainWindow::openItem()
 {
     if (FileNode* n = currentNode(); n && n->hasRealPath())
-        WinShell::openItem(n->fullPath());
+        Platform::openItem(n->fullPath());
 }
 
 void MainWindow::showInExplorer()
 {
     if (FileNode* n = currentNode(); n && n->hasRealPath())
-        WinShell::showInExplorer(n->fullPath());
+        Platform::showInFileManager(n->fullPath());
 }
 
 void MainWindow::openTerminal()
@@ -979,13 +977,13 @@ void MainWindow::openTerminal()
     if (n && !n->isContainer())
         n = n->parent;
     if (n && n->hasRealPath())
-        WinShell::openTerminal(n->fullPath());
+        Platform::openTerminal(n->fullPath());
 }
 
 void MainWindow::showProperties()
 {
     if (FileNode* n = currentNode(); n && n->hasRealPath())
-        WinShell::showProperties(this, n->fullPath());
+        Platform::showProperties(this, n->fullPath());
 }
 
 void MainWindow::zoomHere()
@@ -1026,8 +1024,8 @@ void MainWindow::deleteSelection(bool toRecycleBin)
         list += tr("\u2026and %1 more\n").arg(roots.size() - 10);
 
     QMessageBox box(toRecycleBin ? QMessageBox::Question : QMessageBox::Warning,
-                    toRecycleBin ? tr("Move to Recycle Bin") : tr("Delete Permanently"),
-                    toRecycleBin ? tr("Move %n item(s) (%1) to the Recycle Bin?", nullptr, int(roots.size())).arg(Fmt::size(total))
+                    toRecycleBin ? tr("Move to %1").arg(Platform::trashName()) : tr("Delete Permanently"),
+                    toRecycleBin ? tr("Move %n item(s) (%1) to the %2?", nullptr, int(roots.size())).arg(Fmt::size(total), Platform::trashName())
                                  : tr("Permanently delete %n item(s) (%1)?\n\nThis cannot be undone.", nullptr, int(roots.size())).arg(Fmt::size(total)),
                     QMessageBox::Yes | QMessageBox::No, this);
     box.setInformativeText(list);
@@ -1039,7 +1037,7 @@ void MainWindow::deleteSelection(bool toRecycleBin)
     for (FileNode* n : roots)
         paths << n->fullPath();
 
-    QProgressDialog prog(toRecycleBin ? tr("Moving to Recycle Bin\u2026") : tr("Deleting\u2026"), QString(), 0, 0, this);
+    QProgressDialog prog(toRecycleBin ? tr("Moving to %1\u2026").arg(Platform::trashName()) : tr("Deleting\u2026"), QString(), 0, 0, this);
     prog.setWindowModality(Qt::WindowModal);
     prog.setMinimumDuration(300);
     prog.setCancelButton(nullptr);
@@ -1048,7 +1046,7 @@ void MainWindow::deleteSelection(bool toRecycleBin)
     QFutureWatcher<QVector<bool>> watcher;
     QEventLoop loop;
     connect(&watcher, &QFutureWatcher<QVector<bool>>::finished, &loop, &QEventLoop::quit);
-    watcher.setFuture(QtConcurrent::run([paths, toRecycleBin] { return WinShell::deletePaths(paths, toRecycleBin); }));
+    watcher.setFuture(QtConcurrent::run([paths, toRecycleBin] { return Platform::deletePaths(paths, toRecycleBin); }));
     if (!watcher.isFinished())
         loop.exec();
     prog.close();
@@ -1074,7 +1072,7 @@ void MainWindow::deleteSelection(bool toRecycleBin)
     m_treemap->invalidate();
     refreshCrumbs();
     if (freed > 0)
-        m_summary = toRecycleBin ? tr("Moved %1 to the Recycle Bin.").arg(Fmt::size(freed))
+        m_summary = toRecycleBin ? tr("Moved %1 to the %2.").arg(Fmt::size(freed), Platform::trashName())
                                  : tr("Freed %1.").arg(Fmt::size(freed));
     updateActions();
     updateStatus();
@@ -1138,7 +1136,7 @@ void MainWindow::exportCsv()
 void MainWindow::restartAsAdmin()
 {
     m_scanner->cancel();
-    if (WinShell::restartElevated(m_scanPaths)) {
+    if (Platform::restartElevated(m_scanPaths)) {
         saveSettings();
         QTimer::singleShot(0, qApp, &QApplication::quit);
     } else {
@@ -1146,13 +1144,64 @@ void MainWindow::restartAsAdmin()
     }
 }
 
+void MainWindow::saveTreemapImage()
+{
+    if (!m_treemap->zoomRoot())
+        return;
+    const QString fn = QFileDialog::getSaveFileName(this, tr("Save Treemap as Image"),
+                                                    QDir(QDir::homePath()).filePath(QStringLiteral("treemap.png")),
+                                                    tr("PNG images (*.png);;JPEG images (*.jpg)"));
+    if (fn.isEmpty())
+        return;
+    if (!m_treemap->grab().save(fn))
+        QMessageBox::warning(this, tr("Save Treemap"), tr("Could not write %1").arg(fn));
+}
+
+void MainWindow::prepareAndCapture()
+{
+    if (!m_capture.zoomPath.isEmpty() && m_tree) {
+        const QString want = Scanner::normalizePath(m_capture.zoomPath);
+        FileNode* found = nullptr;
+        forEachNode(m_tree.get(), [&](FileNode* n) {
+            if (!found && n->isContainer() && n->fullPath().compare(want, Qt::CaseInsensitive) == 0)
+                found = n;
+        });
+        if (found) {
+            selectNode(found);
+            m_treeView->expand(m_model->indexForNode(found));
+            m_treemap->setZoomRoot(found);
+        }
+    }
+    m_sideTabs->setCurrentIndex(m_capture.tab);
+    if (!m_capture.highlightExt.isEmpty()) {
+        for (int r = 0; r < m_extProxy->rowCount(); ++r) {
+            const QModelIndex idx = m_extProxy->index(r, 0);
+            if (idx.data().toString().compare(QLatin1Char('.') + m_capture.highlightExt, Qt::CaseInsensitive) == 0) {
+                m_extView->setCurrentIndex(idx);
+                break;
+            }
+        }
+    }
+    QTimer::singleShot(900, this, &MainWindow::doCapture);
+}
+
+void MainWindow::doCapture()
+{
+    grab().save(m_capture.file);
+    m_scanner->cancel();
+    QTimer::singleShot(0, qApp, &QApplication::quit);
+}
+
 void MainWindow::about()
 {
     QMessageBox::about(this, tr("About DrDirectory"),
-                       tr("<h3 style='color:#22D3EE'>DrDirectory 1.0</h3>"
+                       tr("<h3 style='color:#22D3EE'>DrDirectory %2</h3>"
                           "<p>A fast disk-usage analyzer: multithreaded scanning, a cushion-shaded squarified "
                           "treemap, per-type statistics, largest-file finder and safe cleanup.</p>"
                           "<p>Built with Qt %1.</p>"
+                          "<p>Created by Glen Rhodes.</p>"
+                          "<p>Open source under the MIT License.<br>"
+                          "<a href='https://github.com/glenwrhodes/DrDirectory'>github.com/glenwrhodes/DrDirectory</a></p>"
                           "<p>&copy; 2026 Tiny Moosh Games Inc.</p>")
-                           .arg(QString::fromLatin1(qVersion())));
+                           .arg(QString::fromLatin1(qVersion()), QStringLiteral(DRD_VERSION)));
 }

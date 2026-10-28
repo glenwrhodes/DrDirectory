@@ -1,4 +1,4 @@
-#include "WinShell.h"
+#include "Platform.h"
 #include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDir>
@@ -21,7 +21,7 @@ namespace {
 const wchar_t* wstr(const QString& s) { return reinterpret_cast<const wchar_t*>(s.utf16()); }
 } // namespace
 
-namespace WinShell {
+namespace Platform {
 
 QString typeNameForExtension(const QString& ext)
 {
@@ -88,7 +88,7 @@ void openItem(const QString& path)
     QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
 
-void showInExplorer(const QString& path)
+void showInFileManager(const QString& path)
 {
     const QString native = QDir::toNativeSeparators(path);
     PIDLIST_ABSOLUTE pidl = ILCreateFromPathW(wstr(native));
@@ -118,7 +118,7 @@ void openTerminal(const QString& dir)
     ShellExecuteW(nullptr, L"open", L"cmd.exe", nullptr, wstr(native), SW_SHOWNORMAL);
 }
 
-bool isElevated()
+static bool isElevated()
 {
     HANDLE token = nullptr;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
@@ -128,6 +128,29 @@ bool isElevated()
     const bool ok = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &len);
     CloseHandle(token);
     return ok && elevation.TokenIsElevated;
+}
+
+QString fileManagerName() { return QStringLiteral("Explorer"); }
+QString trashName() { return QStringLiteral("Recycle Bin"); }
+bool supportsElevation() { return !isElevated(); }
+
+QList<QStorageInfo> scannableVolumes()
+{
+    QList<QStorageInfo> out;
+    for (const QStorageInfo& s : QStorageInfo::mountedVolumes()) {
+        if (!s.isValid() || !s.isReady())
+            continue;
+        const QString root = QDir::toNativeSeparators(s.rootPath());
+        if (root.size() == 3 && root[1] == QLatin1Char(':'))
+            out << s; // lettered drives only
+    }
+    return out;
+}
+
+bool isLocalVolume(const QStorageInfo& v)
+{
+    const QString root = QDir::toNativeSeparators(v.rootPath());
+    return GetDriveTypeW(wstr(root)) == DRIVE_FIXED;
 }
 
 bool restartElevated(const QStringList& args)
@@ -201,4 +224,4 @@ QVector<bool> deletePaths(const QStringList& paths, bool toRecycleBin)
     return result;
 }
 
-} // namespace WinShell
+} // namespace Platform

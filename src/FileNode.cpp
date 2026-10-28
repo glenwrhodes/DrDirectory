@@ -1,4 +1,5 @@
 #include "FileNode.h"
+#include <QDir>
 #include <algorithm>
 
 bool FileNode::isDeletable() const
@@ -14,7 +15,7 @@ QString FileNode::fullPath() const
         return name;
     QString p = parent->fullPath();
     if (!p.endsWith(QLatin1Char('\\')) && !p.endsWith(QLatin1Char('/')))
-        p += QLatin1Char('\\');
+        p += QDir::separator();
     return p + name;
 }
 

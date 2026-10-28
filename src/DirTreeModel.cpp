@@ -2,7 +2,7 @@
 #include "Format.h"
 #include "Icons.h"
 #include "Roles.h"
-#include "WinShell.h"
+#include "Platform.h"
 #include <QApplication>
 #include <QColor>
 #include <QFileIconProvider>
@@ -82,7 +82,7 @@ QIcon DirTreeModel::iconFor(const FileNode* n) const
     case FileNode::Root: return m_computerIcon;
     case FileNode::Drive: return m_driveIcon;
     case FileNode::Dir: return n->reparsePoint ? m_linkIcon : m_folderIcon;
-    case FileNode::File: return WinShell::iconForExtension(n->extension());
+    case FileNode::File: return Platform::iconForExtension(n->extension());
     default: return m_specialIcon;
     }
 }
@@ -105,7 +105,7 @@ QVariant DirTreeModel::data(const QModelIndex& index, int role) const
         case ColFiles: return n->isContainer() ? Fmt::count(n->fileCount) : QString();
         case ColFolders: return n->isContainer() ? Fmt::count(n->dirCount) : QString();
         case ColModified: return Fmt::dateTime(n->lastWrite);
-        case ColAttributes: return WinShell::attributesString(n->attributes);
+        case ColAttributes: return Platform::attributesString(n->attributes);
         }
         break;
     case Qt::DecorationRole:
@@ -121,8 +121,10 @@ QVariant DirTreeModel::data(const QModelIndex& index, int role) const
             return QColor(107, 124, 142);
         if (n->accessDenied)
             return QColor(245, 158, 139);
-        if (col == ColName && (n->attributes & 0x800 /*COMPRESSED*/))
+#ifdef Q_OS_WIN
+        if (col == ColName && (n->attributes & 0x800 /*FILE_ATTRIBUTE_COMPRESSED*/))
             return QColor(94, 234, 212);
+#endif
         break;
     case Qt::FontRole:
         if (n->isSpecial() || n->reparsePoint) {
@@ -134,11 +136,11 @@ QVariant DirTreeModel::data(const QModelIndex& index, int role) const
     case Qt::ToolTipRole: {
         QString t = n->hasRealPath() ? n->fullPath() : n->name;
         if (n->accessDenied)
-            t += tr("\nAccess denied: contents could not be read (try running as Administrator).");
+            t += tr("\nAccess denied: contents could not be read.");
         if (n->reparsePoint)
-            t += tr("\nJunction / symbolic link: not followed.");
+            t += tr("\nLink, junction or mount point: not followed.");
         if (n->kind == FileNode::Unknown)
-            t += tr("\nUsed space not found by the scan: system files, other users' folders or areas without permission.");
+            t += tr("\nUsed space the scan could not see: system areas, other users' folders or locations without permission.");
         return t;
     }
     case Roles::Fraction: return fraction;
@@ -188,7 +190,7 @@ bool DirTreeModel::lessThan(const FileNode* a, const FileNode* b) const
         case ColFolders: return x->dirCount < y->dirCount ? -1 : (x->dirCount > y->dirCount ? 1 : 0);
         case ColModified: return x->lastWrite < y->lastWrite ? -1 : (x->lastWrite > y->lastWrite ? 1 : 0);
         case ColAttributes:
-            return WinShell::attributesString(x->attributes).compare(WinShell::attributesString(y->attributes));
+            return Platform::attributesString(x->attributes).compare(Platform::attributesString(y->attributes));
         default: return x->size < y->size ? -1 : (x->size > y->size ? 1 : 0);
         }
     };

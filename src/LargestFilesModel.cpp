@@ -1,7 +1,7 @@
 #include "LargestFilesModel.h"
 #include "Format.h"
 #include "Roles.h"
-#include "WinShell.h"
+#include "Platform.h"
 #include <algorithm>
 #include <queue>
 
@@ -70,7 +70,7 @@ QVariant LargestFilesModel::data(const QModelIndex& index, int role) const
         break;
     case Qt::DecorationRole:
         if (index.column() == ColName)
-            return WinShell::iconForExtension(n->extension());
+            return Platform::iconForExtension(n->extension());
         break;
     case Qt::TextAlignmentRole:
         if (index.column() == ColSize)

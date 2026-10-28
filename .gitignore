@@ -4,3 +4,8 @@ out/
 *.user
 CMakeUserPresets.json
 resources/icon_preview.png
+dist/
+deploy/
+AppDir/
+*.AppImage
+selftest.txt

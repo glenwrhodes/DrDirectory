@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QMutex>
 #include <QObject>
+#include <QSet>
 #include <QStringList>
 #include <atomic>
 #include <memory>
@@ -24,7 +25,7 @@ public:
     std::unique_ptr<FileNode> takeResult();
     qint64 elapsedMs() const { return m_elapsed.load(); }
 
-    static bool isDriveRoot(const QString& path);
+    static bool isVolumeRoot(const QString& path); // "C:\\", "/", "/Volumes/X", a mount point
     static QString normalizePath(const QString& path);
 
 signals:
@@ -46,6 +47,7 @@ private:
     std::atomic<qint64> m_elapsed{0};
     std::atomic<quint32> m_tick{0};
     QMutex m_mutex;
+    QSet<QString> m_skipPaths; // never descend (e.g. /System/Volumes on macOS when scanning /)
     QString m_currentPath;
     std::unique_ptr<FileNode> m_result;
     QElapsedTimer m_timer;

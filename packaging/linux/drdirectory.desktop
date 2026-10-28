@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DrDirectory
+GenericName=Disk Usage Analyzer
+Comment=See what is filling your disk with a cushion treemap, then clean it up
+Exec=DrDirectory %F
+Icon=drdirectory
+Terminal=false
+Categories=Utility;System;Filesystem;Qt;
+Keywords=disk;usage;space;treemap;storage;cleanup;windirstat;
+StartupWMClass=DrDirectory

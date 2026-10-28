@@ -10,7 +10,7 @@ namespace Theme {
 QFont displayFont(qreal pointSize, int weight)
 {
     static const bool hasBahn = QFontDatabase::hasFamily(QStringLiteral("Bahnschrift"));
-    QFont f(hasBahn ? QStringLiteral("Bahnschrift") : QStringLiteral("Segoe UI"));
+    QFont f = hasBahn ? QFont(QStringLiteral("Bahnschrift")) : QFontDatabase::systemFont(QFontDatabase::GeneralFont);
     f.setPointSizeF(pointSize);
     f.setWeight(QFont::Weight(weight));
     f.setStyleStrategy(QFont::PreferAntialias);
@@ -132,8 +132,12 @@ void apply(QApplication& app)
     p.setColor(QPalette::Inactive, QPalette::Highlight, QColor(17, 74, 95));
     app.setPalette(p);
 
+#ifdef Q_OS_WIN
     QFont f(QStringLiteral("Segoe UI"));
     f.setPointSizeF(9.5);
+#else
+    QFont f = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
+#endif
     f.setStyleStrategy(QFont::PreferAntialias);
     app.setFont(f);
     app.setStyleSheet(QString::fromLatin1(kStyleSheet));

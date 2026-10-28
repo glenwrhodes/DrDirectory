@@ -41,7 +41,7 @@ def sample(u, v):
     return BG
 
 def render(size):
-    ss = 4 if size <= 64 else 2
+    ss = 4 if size <= 64 else (2 if size <= 256 else 1)
     rows = []
     for y in range(size):
         row = bytearray()
@@ -69,17 +69,35 @@ def png(size, rows):
     return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', size, size, 8, 6, 0, 0, 0))
             + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b''))
 
+RES = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'resources')
+cache = {}
+def png_of(size):
+    if size not in cache:
+        cache[size] = png(size, render(size))
+    return cache[size]
+
+# Windows .ico
 sizes = [256, 64, 48, 32, 24, 16]
-images = [png(s, render(s)) for s in sizes]
+images = [png_of(s) for s in sizes]
 header = struct.pack('<HHH', 0, 1, len(images))
 offset = 6 + 16 * len(images)
 entries = b''; data = b''
 for s, img in zip(sizes, images):
     entries += struct.pack('<BBBBHHII', 0 if s >= 256 else s, 0 if s >= 256 else s, 0, 0, 1, 32, len(img), offset)
     offset += len(img); data += img
-out = os.path.join(os.path.dirname(__file__), '..', 'resources', 'DrDirectory.ico')
-with open(out, 'wb') as f:
+with open(os.path.join(RES, 'DrDirectory.ico'), 'wb') as f:
     f.write(header + entries + data)
-with open(os.path.join(os.path.dirname(__file__), '..', 'resources', 'icon_preview.png'), 'wb') as f:
-    f.write(images[0])
-print('wrote', os.path.abspath(out))
+
+# Linux icon
+with open(os.path.join(RES, 'drdirectory.png'), 'wb') as f:
+    f.write(png_of(256))
+
+# macOS .icns (PNG-based entries)
+icns_types = [(b'icp4', 16), (b'icp5', 32), (b'icp6', 64), (b'ic07', 128), (b'ic08', 256), (b'ic09', 512), (b'ic10', 1024)]
+body = b''
+for t, sz in icns_types:
+    d = png_of(sz)
+    body += t + struct.pack('>I', len(d) + 8) + d
+with open(os.path.join(RES, 'DrDirectory.icns'), 'wb') as f:
+    f.write(b'icns' + struct.pack('>I', len(body) + 8) + body)
+print('icons written to', os.path.abspath(RES))

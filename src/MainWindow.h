@@ -28,7 +28,18 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
-    void startup(const QStringList& args);
+    void startup(const QStringList& paths, int dialogDelayMs = 0);
+
+    // Developer option used to generate the README screenshots: renders the window to a PNG and quits.
+    struct CaptureRequest
+    {
+        QString file;
+        bool duringScan = false;
+        QString zoomPath;
+        QString highlightExt;
+        int tab = 0;
+    };
+    void setCaptureRequest(const CaptureRequest& request) { m_capture = request; }
 
 protected:
     void closeEvent(QCloseEvent* e) override;
@@ -77,6 +88,9 @@ private:
     void exportCsv();
     void restartAsAdmin();
     void about();
+    void saveTreemapImage();
+    void prepareAndCapture();
+    void doCapture();
 
     // data
     std::unique_ptr<FileNode> m_tree;
@@ -90,6 +104,7 @@ private:
     int m_threads = 8;
     bool m_syncing = false;
     QString m_summary;
+    CaptureRequest m_capture;
 
     // models / views
     DirTreeModel* m_model = nullptr;
@@ -111,7 +126,6 @@ private:
     // status bar
     QLabel* m_statusLabel = nullptr;
     QLabel* m_hoverLabel = nullptr;
-    QLabel* m_adminLabel = nullptr;
     QProgressBar* m_progress = nullptr;
 
     // actions
@@ -141,5 +155,6 @@ private:
     QAction* m_actShowSide = nullptr;
     QAction* m_actShowTreemap = nullptr;
     QAction* m_actAbout = nullptr;
+    QAction* m_actSaveImage = nullptr;
     QActionGroup* m_threadGroup = nullptr;
 };

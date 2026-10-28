@@ -157,6 +157,10 @@ void drawGlyph(QPainter& p, Kind k)
         line(12, 16, 12, 19.5);
         line(8, 20, 16, 20);
         break;
+    case File:
+        poly({{6, 3.5}, {14, 3.5}, {18.5, 8}, {18.5, 20.5}, {6, 20.5}, {6, 3.5}});
+        poly({{14, 3.5}, {14, 8}, {18.5, 8}});
+        break;
     case FolderLink: {
         QPainterPath path;
         path.moveTo(3.5, 18.5);
