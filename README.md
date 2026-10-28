@@ -102,6 +102,7 @@ On macOS, Ctrl is Cmd.
 ## Building from source
 
 You need **CMake 3.21+**, a **C++20** compiler and **Qt 6.8 or newer** (Widgets and Concurrent modules).
+On macOS with a current Xcode, use **Qt 6.10+** (older Qt CMake files reference the removed AGL framework).
 
 **Windows** (Visual Studio 2022 + Qt for MSVC):
 
@@ -115,7 +116,7 @@ build.bat
 **macOS** (Xcode command line tools + Qt):
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/Qt/6.8.3/macos
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/Qt/6.10.2/macos
 cmake --build build --parallel
 open build/DrDirectory.app
 ```
