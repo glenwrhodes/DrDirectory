@@ -1,5 +1,6 @@
 #include "DriveDialog.h"
 #include "Format.h"
+#include "Icons.h"
 #include "PercentBarDelegate.h"
 #include "Roles.h"
 #include <QDialogButtonBox>
@@ -88,7 +89,7 @@ DriveDialog::DriveDialog(const QString& lastFolder, QWidget* parent)
 
 void DriveDialog::populate()
 {
-    QFileIconProvider icons;
+    const QIcon driveIcon = Icons::tinted(Icons::Drive, QColor(94, 234, 212));
     const auto volumes = QStorageInfo::mountedVolumes();
     for (const QStorageInfo& s : volumes) {
         if (!s.isValid() || !s.isReady())
@@ -99,7 +100,7 @@ void DriveDialog::populate()
         const UINT type = GetDriveTypeW(reinterpret_cast<const wchar_t*>(root.utf16()));
         auto it = new QTreeWidgetItem(m_drives);
         it->setText(0, root);
-        it->setIcon(0, icons.icon(QFileInfo(s.rootPath())));
+        it->setIcon(0, driveIcon);
         const QString label = s.name().isEmpty() ? s.displayName() : s.name();
         it->setText(1, label == s.rootPath() ? QString() : label);
         it->setText(2, Fmt::size(s.bytesTotal()));

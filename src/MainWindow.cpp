@@ -4,6 +4,8 @@
 #include "DriveDialog.h"
 #include "ExtensionModel.h"
 #include "Format.h"
+#include "Icons.h"
+#include "Theme.h"
 #include "LargestFilesModel.h"
 #include "PercentBarDelegate.h"
 #include "Roles.h"
@@ -21,6 +23,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFutureWatcher>
+#include <QHBoxLayout>
 #include <QGuiApplication>
 #include <QHeaderView>
 #include <QLabel>
@@ -107,71 +110,68 @@ void MainWindow::startup(const QStringList& args)
 
 void MainWindow::createActions()
 {
-    QStyle* st = style();
-    auto themed = [st](QIcon::ThemeIcon t, QStyle::StandardPixmap sp) { return QIcon::fromTheme(t, st->standardIcon(sp)); };
-
-    m_actScan = new QAction(themed(QIcon::ThemeIcon::DocumentOpen, QStyle::SP_DriveHDIcon), tr("&Scan Drive or Folder\u2026"), this);
+    m_actScan = new QAction(Icons::make(Icons::Scan), tr("&Scan Drive or Folder\u2026"), this);
     m_actScan->setShortcut(QKeySequence::Open);
     m_actScan->setToolTip(tr("Choose drives or a folder to scan (Ctrl+O)"));
     connect(m_actScan, &QAction::triggered, this, &MainWindow::openScanDialog);
 
-    m_actRescan = new QAction(themed(QIcon::ThemeIcon::ViewRefresh, QStyle::SP_BrowserReload), tr("&Rescan All"), this);
+    m_actRescan = new QAction(Icons::make(Icons::Rescan), tr("&Rescan All"), this);
     m_actRescan->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F5));
     connect(m_actRescan, &QAction::triggered, this, &MainWindow::rescanAll);
 
-    m_actRefreshSel = new QAction(st->standardIcon(QStyle::SP_BrowserReload), tr("Re&fresh Selected Folder"), this);
+    m_actRefreshSel = new QAction(Icons::make(Icons::Refresh), tr("Re&fresh Selected Folder"), this);
     m_actRefreshSel->setShortcut(QKeySequence(Qt::Key_F5));
     connect(m_actRefreshSel, &QAction::triggered, this, &MainWindow::refreshSelected);
 
-    m_actStop = new QAction(themed(QIcon::ThemeIcon::ProcessStop, QStyle::SP_BrowserStop), tr("S&top Scan"), this);
+    m_actStop = new QAction(Icons::make(Icons::Stop), tr("S&top Scan"), this);
     m_actStop->setShortcut(QKeySequence(Qt::Key_Escape));
     connect(m_actStop, &QAction::triggered, this, &MainWindow::stopScan);
 
-    m_actExport = new QAction(themed(QIcon::ThemeIcon::DocumentSaveAs, QStyle::SP_DialogSaveButton), tr("&Export to CSV\u2026"), this);
+    m_actExport = new QAction(Icons::make(Icons::Export), tr("&Export to CSV\u2026"), this);
     m_actExport->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
     connect(m_actExport, &QAction::triggered, this, &MainWindow::exportCsv);
 
-    m_actAdmin = new QAction(st->standardIcon(QStyle::SP_VistaShield), tr("Restart as &Administrator"), this);
+    m_actAdmin = new QAction(Icons::make(Icons::Shield), tr("Restart as &Administrator"), this);
     m_actAdmin->setToolTip(tr("Restart elevated so protected folders can be measured"));
     connect(m_actAdmin, &QAction::triggered, this, &MainWindow::restartAsAdmin);
 
-    m_actExit = new QAction(themed(QIcon::ThemeIcon::ApplicationExit, QStyle::SP_DialogCloseButton), tr("E&xit"), this);
+    m_actExit = new QAction(Icons::make(Icons::Exit), tr("E&xit"), this);
     m_actExit->setShortcut(QKeySequence(Qt::ALT | Qt::Key_F4));
     connect(m_actExit, &QAction::triggered, this, &QWidget::close);
 
-    m_actOpen = new QAction(tr("&Open"), this);
+    m_actOpen = new QAction(Icons::make(Icons::Open), tr("&Open"), this);
     m_actOpen->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return));
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openItem);
 
-    m_actExplorer = new QAction(st->standardIcon(QStyle::SP_DirOpenIcon), tr("Show in &Explorer"), this);
+    m_actExplorer = new QAction(Icons::make(Icons::Folder), tr("Show in &Explorer"), this);
     m_actExplorer->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
     connect(m_actExplorer, &QAction::triggered, this, &MainWindow::showInExplorer);
 
-    m_actTerminal = new QAction(st->standardIcon(QStyle::SP_ComputerIcon), tr("Open &Terminal Here"), this);
+    m_actTerminal = new QAction(Icons::make(Icons::Terminal), tr("Open &Terminal Here"), this);
     m_actTerminal->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
     connect(m_actTerminal, &QAction::triggered, this, &MainWindow::openTerminal);
 
-    m_actCopyPath = new QAction(themed(QIcon::ThemeIcon::EditCopy, QStyle::SP_FileLinkIcon), tr("&Copy Path"), this);
+    m_actCopyPath = new QAction(Icons::make(Icons::Copy), tr("&Copy Path"), this);
     m_actCopyPath->setShortcut(QKeySequence::Copy);
     connect(m_actCopyPath, &QAction::triggered, this, &MainWindow::copyPath);
 
-    m_actProperties = new QAction(themed(QIcon::ThemeIcon::DocumentProperties, QStyle::SP_FileDialogInfoView), tr("P&roperties"), this);
+    m_actProperties = new QAction(Icons::make(Icons::Info), tr("P&roperties"), this);
     m_actProperties->setShortcut(QKeySequence(Qt::ALT | Qt::Key_Return));
     connect(m_actProperties, &QAction::triggered, this, &MainWindow::showProperties);
 
-    m_actRecycle = new QAction(st->standardIcon(QStyle::SP_TrashIcon), tr("&Delete (to Recycle Bin)\u2026"), this);
+    m_actRecycle = new QAction(Icons::make(Icons::Recycle), tr("&Delete (to Recycle Bin)\u2026"), this);
     m_actRecycle->setShortcut(QKeySequence::Delete);
     connect(m_actRecycle, &QAction::triggered, this, [this] { deleteSelection(true); });
 
-    m_actDelete = new QAction(themed(QIcon::ThemeIcon::EditDelete, QStyle::SP_DialogDiscardButton), tr("Delete &Permanently\u2026"), this);
+    m_actDelete = new QAction(Icons::make(Icons::Delete), tr("Delete &Permanently\u2026"), this);
     m_actDelete->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Delete));
     connect(m_actDelete, &QAction::triggered, this, [this] { deleteSelection(false); });
 
-    m_actZoomIn = new QAction(themed(QIcon::ThemeIcon::ZoomIn, QStyle::SP_ArrowDown), tr("Zoom &In"), this);
+    m_actZoomIn = new QAction(Icons::make(Icons::ZoomIn), tr("Zoom &In"), this);
     m_actZoomIn->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Plus));
-    m_actZoomOut = new QAction(themed(QIcon::ThemeIcon::ZoomOut, QStyle::SP_ArrowUp), tr("Zoom &Out"), this);
+    m_actZoomOut = new QAction(Icons::make(Icons::ZoomOut), tr("Zoom &Out"), this);
     m_actZoomOut->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Minus));
-    m_actZoomReset = new QAction(themed(QIcon::ThemeIcon::ZoomFitBest, QStyle::SP_DirHomeIcon), tr("&Reset Zoom"), this);
+    m_actZoomReset = new QAction(Icons::make(Icons::ZoomReset), tr("&Reset Zoom"), this);
     m_actZoomReset->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
     m_actZoomHere = new QAction(tr("&Zoom Treemap Here"), this);
     m_actZoomHere->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Z));
@@ -180,8 +180,9 @@ void MainWindow::createActions()
     m_actCushion = new QAction(tr("&Cushion Shading"), this);
     m_actCushion->setCheckable(true);
     m_actCushion->setChecked(true);
-    m_actGrid = new QAction(tr("Show &Grid"), this);
+    m_actGrid = new QAction(tr("Tile &Gaps"), this);
     m_actGrid->setCheckable(true);
+    m_actGrid->setChecked(true);
     m_actLabels = new QAction(tr("Show Folder &Labels"), this);
     m_actLabels->setCheckable(true);
     m_actLabels->setChecked(true);
@@ -211,7 +212,7 @@ void MainWindow::createActions()
     m_actShowTreemap->setChecked(true);
     m_actShowTreemap->setShortcut(QKeySequence(Qt::Key_F9));
 
-    m_actAbout = new QAction(themed(QIcon::ThemeIcon::HelpAbout, QStyle::SP_MessageBoxInformation), tr("&About DrDirectory"), this);
+    m_actAbout = new QAction(Icons::make(Icons::Info), tr("&About DrDirectory"), this);
     connect(m_actAbout, &QAction::triggered, this, &MainWindow::about);
 
     m_threadGroup = new QActionGroup(this);
@@ -467,6 +468,22 @@ void MainWindow::createToolBar()
     tb->setObjectName(QStringLiteral("mainToolbar"));
     tb->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     tb->setIconSize(QSize(18, 18));
+    tb->setMovable(false);
+    auto brand = new QWidget(tb);
+    auto bl = new QHBoxLayout(brand);
+    bl->setContentsMargins(4, 0, 14, 0);
+    bl->setSpacing(8);
+    auto logo = new QLabel(brand);
+    logo->setPixmap(Icons::logo(22, devicePixelRatioF()));
+    auto name = new QLabel(QStringLiteral("DR\u2009DIRECTORY"), brand);
+    name->setObjectName(QStringLiteral("BrandText"));
+    QFont bf = Theme::displayFont(11.5, QFont::DemiBold);
+    bf.setLetterSpacing(QFont::AbsoluteSpacing, 2.2);
+    name->setFont(bf);
+    bl->addWidget(logo);
+    bl->addWidget(name);
+    tb->addWidget(brand);
+    tb->addSeparator();
     m_actScan->setIconText(tr("Scan"));
     m_actRescan->setIconText(tr("Rescan"));
     m_actStop->setIconText(tr("Stop"));
@@ -496,13 +513,15 @@ void MainWindow::createStatusBar()
     m_statusLabel = new QLabel(this);
     m_statusLabel->setMinimumWidth(200);
     m_hoverLabel = new QLabel(this);
-    m_hoverLabel->setStyleSheet(QStringLiteral("color: palette(mid);"));
+    m_hoverLabel->setObjectName(QStringLiteral("HoverLabel"));
     m_progress = new QProgressBar(this);
     m_progress->setMaximumWidth(220);
     m_progress->setTextVisible(true);
     m_progress->hide();
     m_adminLabel = new QLabel(this);
-    m_adminLabel->setText(WinShell::isElevated() ? tr("Administrator") : tr("Standard user"));
+    m_adminLabel->setText(WinShell::isElevated() ? tr("ADMIN") : tr("STANDARD USER"));
+    m_adminLabel->setObjectName(WinShell::isElevated() ? QStringLiteral("AdminPillOn") : QStringLiteral("AdminPill"));
+    m_adminLabel->setFont(Theme::displayFont(8.5));
     m_adminLabel->setToolTip(WinShell::isElevated()
                                  ? tr("Running elevated: protected folders are included in the scan.")
                                  : tr("Some system folders can't be read without elevation; they show up as <Unknown>."));
@@ -524,7 +543,7 @@ void MainWindow::loadSettings()
     if (!th.isEmpty())
         m_treeView->header()->restoreState(th);
     m_actCushion->setChecked(s.value(QStringLiteral("cushion"), true).toBool());
-    m_actGrid->setChecked(s.value(QStringLiteral("grid"), false).toBool());
+    m_actGrid->setChecked(s.value(QStringLiteral("tileGaps"), true).toBool());
     m_actLabels->setChecked(s.value(QStringLiteral("labels"), true).toBool());
     m_actShowFree->setChecked(s.value(QStringLiteral("showFree"), false).toBool());
     m_actShowUnknown->setChecked(s.value(QStringLiteral("showUnknown"), true).toBool());
@@ -556,7 +575,7 @@ void MainWindow::saveSettings()
     s.setValue(QStringLiteral("topSplit"), m_topSplit->saveState());
     s.setValue(QStringLiteral("treeHeader"), m_treeView->header()->saveState());
     s.setValue(QStringLiteral("cushion"), m_actCushion->isChecked());
-    s.setValue(QStringLiteral("grid"), m_actGrid->isChecked());
+    s.setValue(QStringLiteral("tileGaps"), m_actGrid->isChecked());
     s.setValue(QStringLiteral("labels"), m_actLabels->isChecked());
     s.setValue(QStringLiteral("showFree"), m_actShowFree->isChecked());
     s.setValue(QStringLiteral("showUnknown"), m_actShowUnknown->isChecked());
@@ -650,6 +669,7 @@ void MainWindow::startScan(const QStringList& pathsIn)
     m_progress->setValue(0);
     m_progress->show();
     m_treemap->setMessage(tr("Scanning %1\u2026").arg(paths.join(QStringLiteral(", "))));
+    m_treemap->setBusy(true);
     m_statusLabel->setText(tr("Scanning\u2026"));
     m_scanner->start(paths, m_threads);
     updateActions();
@@ -706,13 +726,14 @@ void MainWindow::onScanProgress(qint64 files, qint64 dirs, qint64 bytes, const Q
     m_statusLabel->setText(text);
     m_hoverLabel->setText(path);
     if (m_scanMode == ScanMode::Full)
-        m_treemap->setMessage(text + QStringLiteral("\n\n") + path);
+        m_treemap->setMessage(text + QStringLiteral("\n") + QFontMetrics(m_treemap->font()).elidedText(path, Qt::ElideMiddle, qMax(200, m_treemap->width() - 80)));
 }
 
 void MainWindow::onScanFinished(bool cancelled)
 {
     m_progress->hide();
     m_hoverLabel->clear();
+    m_treemap->setBusy(false);
     std::unique_ptr<FileNode> result = m_scanner->takeResult();
     const double secs = m_scanner->elapsedMs() / 1000.0;
     const ScanMode mode = m_scanMode;
@@ -1128,7 +1149,7 @@ void MainWindow::restartAsAdmin()
 void MainWindow::about()
 {
     QMessageBox::about(this, tr("About DrDirectory"),
-                       tr("<h3>DrDirectory 1.0</h3>"
+                       tr("<h3 style='color:#22D3EE'>DrDirectory 1.0</h3>"
                           "<p>A fast disk-usage analyzer: multithreaded scanning, a cushion-shaded squarified "
                           "treemap, per-type statistics, largest-file finder and safe cleanup.</p>"
                           "<p>Built with Qt %1.</p>"

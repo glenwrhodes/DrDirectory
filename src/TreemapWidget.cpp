@@ -1,19 +1,22 @@
 #include "TreemapWidget.h"
 #include "Format.h"
+#include "Icons.h"
+#include "Theme.h"
 #include <QContextMenuEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QToolTip>
+#include <QtMath>
 #include <QWheelEvent>
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
 namespace {
-const QColor kDirColor(140, 140, 140);
-const QColor kFreeColor(176, 176, 176);
-const QColor kUnknownColor(214, 200, 120);
+const QColor kDirColor(44, 58, 74);
+const QColor kFreeColor(30, 40, 52);
+const QColor kUnknownColor(70, 84, 102);
 } // namespace
 
 TreemapWidget::TreemapWidget(ExtensionTable* exts, QWidget* parent)
@@ -35,7 +38,13 @@ TreemapWidget::TreemapWidget(ExtensionTable* exts, QWidget* parent)
     m_lx = -1.0 / len;
     m_ly = -1.0 / len;
     m_lz = 10.0 / len;
-    m_message = tr("Choose a drive or folder to scan (File \u2192 Scan\u2026)");
+    m_message = tr("Choose a drive or folder to scan  \u00B7  Ctrl+O");
+    m_anim.setInterval(33);
+    connect(&m_anim, &QTimer::timeout, this, [this] {
+        m_sweep = std::fmod(m_sweep + 3.2, 360.0);
+        if (!m_zoom)
+            update();
+    });
 }
 
 void TreemapWidget::setTopRoot(FileNode* root)
@@ -91,6 +100,16 @@ void TreemapWidget::setMessage(const QString& msg)
     m_message = msg;
     if (!m_zoom)
         update();
+}
+
+void TreemapWidget::setBusy(bool busy)
+{
+    m_busy = busy;
+    if (busy)
+        m_anim.start();
+    else
+        m_anim.stop();
+    update();
 }
 
 void TreemapWidget::invalidate()
@@ -169,11 +188,24 @@ void TreemapWidget::render()
     m_dpr = devicePixelRatioF();
     const QSize px(qMax(1, qRound(width() * m_dpr)), qMax(1, qRound(height() * m_dpr)));
     m_image = QImage(px, QImage::Format_RGB32);
-    m_image.fill(palette().color(QPalette::Window).darker(120));
+    m_image.fill(Theme::Bg);
     m_rects.clear();
     if (m_zoom && m_zoom->size > 0) {
         const double s[4] = {0, 0, 0, 0};
         drawNode(m_zoom, QRect(QPoint(0, 0), px), s, m_opt.height, true);
+        if (m_opt.grid) {
+            // Separate the top-level folders into distinct "panels".
+            QPainter ip(&m_image);
+            ip.setPen(QPen(Theme::Bg, qMax(2.0, 2.0 * m_dpr)));
+            ip.setBrush(Qt::NoBrush);
+            for (auto& c : m_zoom->children) {
+                auto it = m_rects.find(c.get());
+                if (it != m_rects.end() && c->isContainer())
+                    ip.drawRect(QRectF(it->second));
+            }
+            ip.setPen(QPen(Theme::Bg, 2.0 * m_dpr));
+            ip.drawRect(QRectF(QRect(QPoint(0, 0), px)));
+        }
     }
     m_image.setDevicePixelRatio(m_dpr);
     m_dirty = false;
@@ -298,7 +330,7 @@ void TreemapWidget::renderLeaf(const QRect& rc, const double* s, const QColor& c
         return;
     const double cr = color.red(), cg = color.green(), cb = color.blue();
     const bool grid = m_opt.grid && rc.width() > 3 && rc.height() > 3;
-    const QRgb gridColor = qRgb(int(cr * 0.45), int(cg * 0.45), int(cb * 0.45));
+    const QRgb gridColor = Theme::Bg.rgb();
 
     if (!m_opt.cushion) {
         const QRgb c = qRgb(int(cr), int(cg), int(cb));
@@ -353,12 +385,7 @@ void TreemapWidget::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
     if (!m_zoom) {
-        p.fillRect(rect(), palette().color(QPalette::Base));
-        p.setPen(palette().color(QPalette::PlaceholderText));
-        QFont f = font();
-        f.setPointSizeF(f.pointSizeF() * 1.2);
-        p.setFont(f);
-        p.drawText(rect().adjusted(20, 20, -20, -20), Qt::AlignCenter | Qt::TextWordWrap, m_message);
+        drawEmptyState(p);
         return;
     }
     if (m_resizePending && !m_image.isNull()) {
@@ -371,12 +398,76 @@ void TreemapWidget::paintEvent(QPaintEvent*)
     drawOverlays(p);
 }
 
+void TreemapWidget::drawEmptyState(QPainter& p)
+{
+    p.fillRect(rect(), Theme::Bg);
+    p.setRenderHint(QPainter::Antialiasing);
+    // faint blueprint grid
+    p.setPen(QPen(QColor(34, 211, 238, 10), 1));
+    for (int x = 0; x < width(); x += 28)
+        p.drawLine(x, 0, x, height());
+    for (int y = 0; y < height(); y += 28)
+        p.drawLine(0, y, width(), y);
+
+    const QPointF c(width() / 2.0, height() / 2.0 - 14);
+    const qreal R = qBound(36.0, std::min(width(), height()) * 0.30, 170.0);
+    const QColor cyan = Theme::Accent;
+
+    if (m_busy) {
+        for (int i = 1; i <= 4; ++i) {
+            p.setPen(QPen(QColor(cyan.red(), cyan.green(), cyan.blue(), i == 4 ? 90 : 38), 1));
+            p.setBrush(Qt::NoBrush);
+            p.drawEllipse(c, R * i / 4.0, R * i / 4.0);
+        }
+        p.setPen(QPen(QColor(cyan.red(), cyan.green(), cyan.blue(), 30), 1));
+        p.drawLine(QPointF(c.x() - R, c.y()), QPointF(c.x() + R, c.y()));
+        p.drawLine(QPointF(c.x(), c.y() - R), QPointF(c.x(), c.y() + R));
+
+        QConicalGradient g(c, m_sweep);
+        g.setColorAt(0.0, QColor(34, 211, 238, 0));
+        g.setColorAt(0.78, QColor(34, 211, 238, 0));
+        g.setColorAt(1.0, QColor(34, 211, 238, 120));
+        p.setPen(Qt::NoPen);
+        p.setBrush(g);
+        p.drawEllipse(c, R, R);
+
+        const double a = qDegreesToRadians(m_sweep);
+        p.setPen(QPen(QColor(150, 240, 255, 220), 1.6));
+        p.drawLine(c, QPointF(c.x() + R * std::cos(a), c.y() - R * std::sin(a)));
+
+        static const double blips[][2] = {{30, 0.62}, {115, 0.38}, {200, 0.80}, {255, 0.55}, {320, 0.28}, {160, 0.70}};
+        for (const auto& b : blips) {
+            const double since = std::fmod(m_sweep - b[0] + 720.0, 360.0);
+            const int alpha = int(qBound(0.0, 1.0 - since / 140.0, 1.0) * 230);
+            if (alpha <= 0)
+                continue;
+            const double ba = qDegreesToRadians(b[0]);
+            const QPointF bp(c.x() + R * b[1] * std::cos(ba), c.y() - R * b[1] * std::sin(ba));
+            QRadialGradient glow(bp, 9);
+            glow.setColorAt(0, QColor(94, 234, 212, alpha));
+            glow.setColorAt(1, QColor(94, 234, 212, 0));
+            p.setBrush(glow);
+            p.drawEllipse(bp, 9, 9);
+        }
+    } else {
+        const QPixmap logo = Icons::logo(int(R * 0.9), devicePixelRatioF());
+        p.setOpacity(0.55);
+        p.drawPixmap(QPointF(c.x() - R * 0.45, c.y() - R * 0.45), logo);
+        p.setOpacity(1.0);
+    }
+
+    p.setFont(Theme::displayFont(11.5));
+    p.setPen(QColor(150, 172, 194));
+    const QRectF textRect(20, c.y() + R + 14, width() - 40, height() - (c.y() + R + 14) - 6);
+    p.drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, m_message);
+}
+
 void TreemapWidget::drawOverlays(QPainter& p)
 {
     // Highlight every file of the selected extension.
     if (m_highlightExt >= 0) {
-        QPen dark(QColor(0, 0, 0, 200), 1);
-        QPen light(QColor(255, 255, 255), 1);
+        QPen dark(QColor(0, 0, 0, 210), 1);
+        QPen light(QColor(34, 211, 238), 1);
         p.setBrush(Qt::NoBrush);
         for (const auto& [node, r] : m_rects) {
             if (node->kind != FileNode::File || node->extId != m_highlightExt)
@@ -393,27 +484,33 @@ void TreemapWidget::drawOverlays(QPainter& p)
 
     // Labels for the immediate children of the zoom root.
     if (m_opt.labels && m_zoom) {
-        QFont f = font();
-        f.setPointSizeF(f.pointSizeF() * 0.9);
-        p.setFont(f);
-        const QFontMetrics fm(f);
-        const qreal lineH = fm.height();
+        p.setRenderHint(QPainter::Antialiasing);
+        const QFont nameFont = Theme::displayFont(9.5, QFont::Medium);
+        const QFont sizeFont = Theme::displayFont(8.5);
+        const QFontMetrics fmName(nameFont), fmSize(sizeFont);
         for (auto& c : m_zoom->children) {
             auto it = m_rects.find(c.get());
             if (it == m_rects.end())
                 continue;
             const QRectF lr = toLogical(it->second);
-            if (lr.width() < 70 || lr.height() < 2 * lineH + 12)
+            const qreal boxH = fmName.height() + fmSize.height() + 8;
+            if (lr.width() < 72 || lr.height() < boxH + 10)
                 continue;
-            const QString t1 = fm.elidedText(c->name, Qt::ElideMiddle, int(lr.width() - 20));
+            const QString t1 = fmName.elidedText(c->name, Qt::ElideMiddle, int(lr.width() - 24));
             const QString t2 = Fmt::size(c->size);
-            const qreal tw = std::max(fm.horizontalAdvance(t1), fm.horizontalAdvance(t2));
-            const QRectF box(lr.left() + 4, lr.top() + 4, std::min(lr.width() - 8, tw + 10), 2 * lineH + 6);
-            p.setPen(Qt::NoPen);
-            p.setBrush(QColor(0, 0, 0, 140));
-            p.drawRoundedRect(box, 3, 3);
-            p.setPen(Qt::white);
-            p.drawText(box.adjusted(5, 3, -5, -3), Qt::AlignLeft | Qt::AlignTop, t1 + QLatin1Char('\n') + t2);
+            const qreal tw = std::max(fmName.horizontalAdvance(t1), fmSize.horizontalAdvance(t2));
+            const QRectF box(lr.left() + 5, lr.top() + 5, std::min(lr.width() - 10, tw + 14), boxH);
+            p.setPen(QPen(QColor(34, 211, 238, 70), 1));
+            p.setBrush(QColor(6, 11, 17, 195));
+            p.drawRoundedRect(box, 4, 4);
+            p.setPen(QPen(QColor(34, 211, 238, 200), 2));
+            p.drawLine(QPointF(box.left() + 1, box.top() + 4), QPointF(box.left() + 1, box.bottom() - 4));
+            p.setFont(nameFont);
+            p.setPen(QColor(232, 244, 252));
+            p.drawText(QRectF(box.left() + 8, box.top() + 3, box.width() - 12, fmName.height()), Qt::AlignLeft | Qt::AlignVCenter, t1);
+            p.setFont(sizeFont);
+            p.setPen(Theme::Accent2);
+            p.drawText(QRectF(box.left() + 8, box.top() + 3 + fmName.height(), box.width() - 12, fmSize.height()), Qt::AlignLeft | Qt::AlignVCenter, t2);
         }
     }
 
@@ -422,7 +519,7 @@ void TreemapWidget::drawOverlays(QPainter& p)
         const QRect r = drawnRectFor(m_hover);
         if (!r.isEmpty()) {
             p.setBrush(Qt::NoBrush);
-            p.setPen(QPen(QColor(255, 255, 255, 170), 1));
+            p.setPen(QPen(QColor(200, 240, 255, 150), 1));
             p.drawRect(toLogical(r).adjusted(0.5, 0.5, -0.5, -0.5));
         }
     }
@@ -433,10 +530,16 @@ void TreemapWidget::drawOverlays(QPainter& p)
         if (!r.isEmpty()) {
             const QRectF lr = toLogical(r);
             p.setBrush(Qt::NoBrush);
-            p.setPen(QPen(QColor(0, 0, 0), 3));
-            p.drawRect(lr.adjusted(1.5, 1.5, -1.5, -1.5));
-            p.setPen(QPen(QColor(255, 235, 59), 1.6));
-            p.drawRect(lr.adjusted(1.5, 1.5, -1.5, -1.5));
+            const QRectF fr = lr.adjusted(1.5, 1.5, -1.5, -1.5);
+            p.setRenderHint(QPainter::Antialiasing, false);
+            p.setPen(QPen(QColor(0, 0, 0, 200), 4));
+            p.drawRect(fr);
+            p.setPen(QPen(QColor(34, 211, 238, 70), 6));
+            p.drawRect(fr.adjusted(1, 1, -1, -1));
+            p.setPen(QPen(QColor(34, 211, 238, 255), 1.6));
+            p.drawRect(fr);
+            p.setPen(QPen(QColor(220, 252, 255, 160), 1));
+            p.drawRect(fr.adjusted(2, 2, -2, -2));
         }
     }
 }

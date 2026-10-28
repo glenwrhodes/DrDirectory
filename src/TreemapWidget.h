@@ -17,12 +17,12 @@ public:
     struct Options
     {
         bool cushion = true;
-        bool grid = false;
+        bool grid = true;         // dark gaps between tiles
         bool labels = true;
-        double height = 0.38;     // initial cushion height
-        double scale = 0.91;      // height falloff per level
-        double ambient = 0.15;    // ambient light
-        double brightness = 1.08; // overall gain
+        double height = 0.30;     // initial cushion height
+        double scale = 0.90;      // height falloff per level
+        double ambient = 0.22;    // ambient light
+        double brightness = 1.0;  // overall gain
     };
 
     explicit TreemapWidget(ExtensionTable* exts, QWidget* parent = nullptr);
@@ -36,6 +36,7 @@ public:
     void setOptions(const Options& o);
     Options options() const { return m_opt; }
     void setMessage(const QString& msg);
+    void setBusy(bool busy);
     void invalidate();
     // Call before `node` (or, with keepNode, only its descendants) is destroyed.
     void prepareRemoval(FileNode* node, bool keepNode);
@@ -76,6 +77,7 @@ private:
     QPoint toPixels(const QPointF& p) const;
     void zoomToward(FileNode* n);
     void drawOverlays(QPainter& p);
+    void drawEmptyState(QPainter& p);
 
     ExtensionTable* m_exts;
     Options m_opt;
@@ -91,6 +93,9 @@ private:
     bool m_resizePending = false;
     int m_wheelAccum = 0;
     QTimer m_resizeTimer;
+    QTimer m_anim;
+    bool m_busy = false;
+    double m_sweep = 90.0;
     std::unordered_map<const FileNode*, QRect> m_rects;
     double m_lx, m_ly, m_lz;
 };

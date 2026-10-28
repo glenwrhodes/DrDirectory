@@ -11,6 +11,8 @@ set(DRD_SOURCES
     src/main.cpp
     src/FileNode.h src/FileNode.cpp
     src/Roles.h src/Format.h
+    src/Theme.h src/Theme.cpp
+    src/Icons.h src/Icons.cpp
     src/Scanner.h src/Scanner.cpp
     src/Extensions.h src/Extensions.cpp
     src/WinShell.h src/WinShell.cpp

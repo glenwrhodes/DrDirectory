@@ -1,5 +1,6 @@
 #include "DirTreeModel.h"
 #include "Format.h"
+#include "Icons.h"
 #include "Roles.h"
 #include "WinShell.h"
 #include <QApplication>
@@ -12,12 +13,11 @@
 DirTreeModel::DirTreeModel(QObject* parent)
     : QAbstractItemModel(parent)
 {
-    QFileIconProvider p;
-    m_folderIcon = p.icon(QAbstractFileIconProvider::Folder);
-    m_driveIcon = p.icon(QAbstractFileIconProvider::Drive);
-    m_computerIcon = p.icon(QAbstractFileIconProvider::Computer);
-    m_specialIcon = QApplication::style()->standardIcon(QStyle::SP_DriveHDIcon);
-    m_linkIcon = QApplication::style()->standardIcon(QStyle::SP_DirLinkIcon);
+    m_folderIcon = Icons::tinted(Icons::Folder, QColor(72, 196, 228));
+    m_driveIcon = Icons::tinted(Icons::Drive, QColor(94, 234, 212));
+    m_computerIcon = Icons::tinted(Icons::Computer, QColor(94, 234, 212));
+    m_specialIcon = Icons::tinted(Icons::Info, QColor(110, 128, 148));
+    m_linkIcon = Icons::tinted(Icons::FolderLink, QColor(110, 128, 148));
 }
 
 void DirTreeModel::setRoot(FileNode* root)
@@ -118,11 +118,11 @@ QVariant DirTreeModel::data(const QModelIndex& index, int role) const
         break;
     case Qt::ForegroundRole:
         if (n->isSpecial() || n->reparsePoint)
-            return QColor(128, 128, 128);
+            return QColor(107, 124, 142);
         if (n->accessDenied)
-            return QColor(214, 64, 64);
+            return QColor(245, 158, 139);
         if (col == ColName && (n->attributes & 0x800 /*COMPRESSED*/))
-            return QColor(40, 110, 230);
+            return QColor(94, 234, 212);
         break;
     case Qt::FontRole:
         if (n->isSpecial() || n->reparsePoint) {

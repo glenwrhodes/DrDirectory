@@ -43,12 +43,13 @@ QPixmap ExtensionModel::swatch(const QColor& c) const
     QPixmap pm(14, 14);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
-    QLinearGradient g(0, 0, 14, 14);
-    g.setColorAt(0, c.lighter(130));
-    g.setColorAt(1, c.darker(115));
+    p.setRenderHint(QPainter::Antialiasing);
+    QRadialGradient g(QPointF(5, 5), 10);
+    g.setColorAt(0, c.lighter(140));
+    g.setColorAt(1, c.darker(140));
     p.setBrush(g);
-    p.setPen(c.darker(160));
-    p.drawRect(0, 0, 13, 13);
+    p.setPen(QPen(c.lighter(120), 0.8));
+    p.drawRoundedRect(QRectF(1, 1, 12, 12), 3, 3);
     p.end();
     m_swatches.insert(c.rgb(), pm);
     return pm;

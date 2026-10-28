@@ -5,23 +5,23 @@
 QColor ExtensionTable::paletteColor(int rank, const QString& ext)
 {
     static const QColor palette[] = {
-        QColor(60, 125, 255),  QColor(255, 69, 69),   QColor(76, 209, 76),   QColor(255, 210, 46),
-        QColor(46, 216, 230),  QColor(224, 76, 224),  QColor(255, 140, 26),  QColor(142, 107, 255),
-        QColor(154, 217, 61),  QColor(255, 111, 168), QColor(26, 166, 143),  QColor(200, 155, 90),
-        QColor(108, 156, 217), QColor(217, 108, 75),  QColor(176, 176, 48),  QColor(122, 196, 165),
+        QColor(46, 140, 255),  QColor(20, 196, 186),  QColor(96, 110, 240),  QColor(56, 200, 240),
+        QColor(116, 136, 166), QColor(28, 120, 200),  QColor(96, 226, 206),  QColor(140, 128, 236),
+        QColor(30, 160, 150),  QColor(150, 170, 196), QColor(66, 92, 196),   QColor(44, 176, 220),
+        QColor(84, 104, 132),  QColor(120, 196, 236), QColor(24, 104, 128),  QColor(176, 190, 210),
     };
     constexpr int n = int(sizeof(palette) / sizeof(palette[0]));
     if (rank >= 0 && rank < n)
         return palette[rank];
     const int hue = int(qHash(ext) % 360u);
-    return QColor::fromHsv(hue, 80, 185);
+    return QColor::fromHsv(185 + hue % 60, 45 + int(qHash(ext + QLatin1Char('#')) % 50u), 120 + hue % 70);
 }
 
 QColor ExtensionTable::color(int extId) const
 {
     if (extId >= 0 && extId < m_list.size())
         return m_list[extId].color;
-    return QColor(160, 160, 160);
+    return QColor(90, 106, 126);
 }
 
 qint64 ExtensionTable::totalBytes() const

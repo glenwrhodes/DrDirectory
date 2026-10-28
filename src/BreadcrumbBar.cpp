@@ -1,5 +1,6 @@
 #include "BreadcrumbBar.h"
 #include "Format.h"
+#include "Icons.h"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QStyle>
@@ -8,11 +9,13 @@
 BreadcrumbBar::BreadcrumbBar(QWidget* parent)
     : QWidget(parent)
 {
+    setObjectName(QStringLiteral("Breadcrumb"));
+    setAttribute(Qt::WA_StyledBackground, true);
     auto outer = new QHBoxLayout(this);
-    outer->setContentsMargins(4, 2, 6, 2);
+    outer->setContentsMargins(6, 3, 10, 3);
     outer->setSpacing(2);
     m_up = new QToolButton(this);
-    m_up->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
+    m_up->setIcon(Icons::make(Icons::Up));
     m_up->setToolTip(tr("Zoom out one level (Backspace / mouse wheel down)"));
     m_up->setAutoRaise(true);
     m_up->setEnabled(false);
@@ -23,6 +26,7 @@ BreadcrumbBar::BreadcrumbBar(QWidget* parent)
     outer->addLayout(m_crumbs);
     outer->addStretch(1);
     m_info = new QLabel(this);
+    m_info->setObjectName(QStringLiteral("CrumbInfo"));
     m_info->setTextInteractionFlags(Qt::TextSelectableByMouse);
     outer->addWidget(m_info);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -51,6 +55,7 @@ void BreadcrumbBar::setNodes(FileNode* top, FileNode* zoom)
         if (chain.size() > maxShown && i > 0 && i < chain.size() - (maxShown - 1)) {
             if (i == 1) {
                 auto dots = new QLabel(QStringLiteral(" \u2026 \u203A "), this);
+                dots->setObjectName(QStringLiteral("CrumbSep"));
                 m_crumbs->addWidget(dots);
             }
             continue;
@@ -60,14 +65,17 @@ void BreadcrumbBar::setNodes(FileNode* top, FileNode* zoom)
         b->setAutoRaise(true);
         b->setText(n->name);
         b->setToolTip(n->hasRealPath() ? n->fullPath() : n->name);
-        QFont f = b->font();
-        f.setBold(n == zoom);
-        b->setFont(f);
+        if (n == zoom)
+            b->setStyleSheet(QStringLiteral("color:#EAFBFF;"));
         connect(b, &QToolButton::clicked, this, [this, n] { emit nodeClicked(n); });
         m_crumbs->addWidget(b);
         if (i + 1 < chain.size())
-            m_crumbs->addWidget(new QLabel(QStringLiteral("\u203A"), this));
+        {
+            auto sep = new QLabel(QStringLiteral("\u203A"), this);
+            sep->setObjectName(QStringLiteral("CrumbSep"));
+            m_crumbs->addWidget(sep);
+        }
     }
-    m_info->setText(tr("%1  \u2022  %2 files  \u2022  %3 folders")
+    m_info->setText(tr("%1   \u00B7   %2 files   \u00B7   %3 folders")
                         .arg(Fmt::size(zoom->size), Fmt::count(zoom->fileCount), Fmt::count(zoom->dirCount)));
 }
